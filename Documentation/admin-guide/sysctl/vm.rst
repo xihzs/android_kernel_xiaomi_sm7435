@@ -25,7 +25,10 @@ files can be found in mm/swap.c.
 Currently, these files are in /proc/sys/vm:
 
 - admin_reserve_kbytes
+- anon_min_ratio
 - block_dump
+- clean_low_ratio
+- clean_min_ratio
 - compact_memory
 - compaction_proactiveness
 - compact_unevictable_allowed
@@ -41,6 +44,7 @@ Currently, these files are in /proc/sys/vm:
 - extra_free_kbytes
 - highmem_is_dirtyable
 - hugetlb_shm_group
+- kswapd_threads
 - laptop_mode
 - legacy_va_layout
 - lowmem_reserve_ratio
@@ -107,11 +111,72 @@ On x86_64 this is about 128MB.
 Changing this takes effect whenever an application requests memory.
 
 
+anon_min_ratio
+==============
+
+This knob provides *hard* protection of anonymous pages. The anonymous pages
+on the current node won't be reclaimed under any conditions when their amount
+is below vm.anon_min_ratio.
+
+This knob may be used to prevent excessive swap thrashing when anonymous
+memory is low (for example, when memory is going to be overfilled by
+compressed data of zram module).
+
+Setting this value too high (close to 100) can result in inability to
+swap and can lead to early OOM under memory pressure.
+
+The unit of measurement is the percentage of the total memory of the node.
+
+The default value is 0.
+
+
 block_dump
 ==========
 
 block_dump enables block I/O debugging when set to a nonzero value. More
 information on block I/O debugging is in Documentation/admin-guide/laptops/laptop-mode.rst.
+
+
+clean_low_ratio
+================
+
+This knob provides *best-effort* protection of clean file pages. The file pages
+on the current node won't be reclaimed under memory pressure when the amount of
+clean file pages is below vm.clean_low_ratio *unless* we threaten to OOM.
+
+Protection of clean file pages using this knob may be used when swapping is
+still possible to
+  - prevent disk I/O thrashing under memory pressure;
+  - improve performance in disk cache-bound tasks under memory pressure.
+
+Setting it to a high value may result in a early eviction of anonymous pages
+into the swap space by attempting to hold the protected amount of clean file
+pages in memory.
+
+The unit of measurement is the percentage of the total memory of the node.
+
+The default value is 0.
+
+
+clean_min_ratio
+================
+
+This knob provides *hard* protection of clean file pages. The file pages on the
+current node won't be reclaimed under memory pressure when the amount of clean
+file pages is below vm.clean_min_ratio.
+
+Hard protection of clean file pages using this knob may be used to
+  - prevent disk I/O thrashing under memory pressure even with no free swap space;
+  - improve performance in disk cache-bound tasks under memory pressure;
+  - avoid high latency and prevent livelock in near-OOM conditions.
+
+Setting it to a high value may result in a early out-of-memory condition due to
+the inability to reclaim the protected amount of clean file pages when other
+types of pages cannot be reclaimed.
+
+The unit of measurement is the percentage of the total memory of the node.
+
+The default value is 1.
 
 
 compact_memory
@@ -330,6 +395,25 @@ hugetlb_shm_group
 hugetlb_shm_group contains group id that is allowed to create SysV
 shared memory segment using hugetlb page.
 
+kswapd_threads
+==============
+kswapd_threads allows you to control the number of kswapd threads per node
+running on the system. This provides the ability to devote additional CPU
+resources toward proactive page replacement with the goal of reducing
+direct reclaims. When direct reclaims are prevented, the CPU consumed
+by them is prevented as well. Depending on the workload, the result can
+cause aggregate CPU usage on the system to go up, down or stay the same.
+
+More aggressive page replacement can reduce direct reclaims which cause
+latency for tasks and decrease throughput when doing filesystem IO through
+the pagecache. Direct reclaims are recorded using the allocstall counter
+in /proc/vmstat.
+
+The default value is 1 and the range of acceptible values are 1-16.
+Always start with lower values in the 2-6 range. Higher values should
+be justified with testing. If direct reclaims occur in spite of high
+values, the cost of direct reclaims (in latency) that occur can be
+higher due to increased lock contention.
 
 laptop_mode
 ===========
@@ -885,6 +969,14 @@ be 133 (x + 2x = 200, 2x = 133.33).
 
 At 0, the kernel will not initiate swap until the amount of free and
 file-backed pages is less than the high watermark in a zone.
+
+This knob has no effect if the amount of clean file pages on the current
+node is below vm.clean_low_ratio or vm.clean_min_ratio. In this case,
+only anonymous pages can be reclaimed.
+
+If the number of anonymous pages on the current node is below
+vm.anon_min_ratio, then only file pages can be reclaimed with
+any vm.swappiness value.
 
 
 unprivileged_userfaultfd

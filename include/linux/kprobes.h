@@ -178,6 +178,7 @@ struct kprobe_blacklist_entry {
 	struct list_head list;
 	unsigned long start_addr;
 	unsigned long end_addr;
+	struct rcu_head rcu;
 };
 
 #ifdef CONFIG_KPROBES
@@ -397,6 +398,9 @@ void dump_kprobe(struct kprobe *kp);
 
 void *alloc_insn_page(void);
 void free_insn_page(void *page);
+
+void *alloc_optinsn_page(void);
+void free_optinsn_page(void *page);
 
 int kprobe_get_kallsym(unsigned int symnum, unsigned long *value, char *type,
 		       char *sym);

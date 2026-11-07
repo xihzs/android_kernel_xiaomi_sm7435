@@ -12,8 +12,21 @@
 
 static char *saved_boot_config;
 
+#ifdef CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG
+extern struct static_key_false susfs_is_fake_cmdline_or_bootconfig_buffer_set;
+extern void susfs_spoof_cmdline_or_bootconfig(struct seq_file *m);
+#endif
+
 static int boot_config_proc_show(struct seq_file *m, void *v)
 {
+#ifdef CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG
+	if (static_branch_likely(&susfs_is_fake_cmdline_or_bootconfig_buffer_set)) {
+		if (saved_boot_config) {
+			susfs_spoof_cmdline_or_bootconfig(m);
+			return 0;
+		}
+	}
+#endif
 	if (saved_boot_config)
 		seq_puts(m, saved_boot_config);
 	return 0;
@@ -72,6 +85,14 @@ out:
 static int __init proc_boot_config_init(void)
 {
 	int len;
+#if defined(CONFIG_BOOTCONFIG_HWC_IS_PRODUCT_SKU)
+	const char *HWC_KEY = "androidboot.hwc = ";
+	const char *SKU_KEY = "androidboot.product.hardware.sku = ";
+	char hwc_value[64] = { 0 };
+	char *hwc_line, *hwc_quote_start, *hwc_quote_end;
+	char *sku_line, *sku_quote_start, *sku_quote_end;
+	size_t hwc_len, sku_old_len, sku_new_len;
+#endif
 
 	len = copy_xbc_key_value_list(NULL, 0);
 	if (len < 0)
@@ -87,6 +108,51 @@ static int __init proc_boot_config_init(void)
 			kfree(saved_boot_config);
 			return len;
 		}
+
+#if defined(CONFIG_BOOTCONFIG_HWC_IS_PRODUCT_SKU)
+		hwc_line = strstr(saved_boot_config, HWC_KEY);
+		if (!hwc_line)
+			goto skip;
+
+		hwc_quote_start = strchr(hwc_line, '"');
+		if (!hwc_quote_start)
+			goto skip;
+		hwc_quote_start++;
+		hwc_quote_end = strchr(hwc_quote_start, '"');
+		if (!hwc_quote_end || hwc_quote_end <= hwc_quote_start)
+			goto skip;
+
+		hwc_len = hwc_quote_end - hwc_quote_start;
+		if (hwc_len >= sizeof(hwc_value))
+			hwc_len = sizeof(hwc_value) - 1;
+		strncpy(hwc_value, hwc_quote_start, hwc_len);
+		hwc_value[hwc_len] = '\0';
+		if (!hwc_value[0])
+			goto skip;
+
+		sku_line = strstr(saved_boot_config, SKU_KEY);
+		if (!sku_line)
+			goto skip;
+
+		sku_quote_start = strchr(sku_line, '"');
+		if (!sku_quote_start)
+			goto skip;
+		sku_quote_start++;
+		sku_quote_end = strchr(sku_quote_start, '"');
+		if (!sku_quote_end || sku_quote_end <= sku_quote_start)
+			goto skip;
+
+		sku_old_len = sku_quote_end - sku_quote_start;
+		sku_new_len = strlen(hwc_value);
+		if (sku_new_len <= sku_old_len) {
+			memmove(sku_quote_start + sku_new_len, sku_quote_end,
+				strlen(sku_quote_end) + 1);
+			memcpy(sku_quote_start, hwc_value, sku_new_len);
+		} else {
+			memcpy(sku_quote_start, hwc_value, sku_old_len);
+		}
+#endif
+	skip:;
 	}
 
 	proc_create_single("bootconfig", 0, NULL, boot_config_proc_show);

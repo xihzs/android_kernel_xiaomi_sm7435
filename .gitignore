@@ -154,5 +154,25 @@ x509.genkey
 # Clang's compilation database file
 /compile_commands.json
 
+# generated defconfigs
+arch/*/configs/vendor/*_defconfig
+
+# vendor device tree directories
+arch/arm64/boot/dts/vendor
+arch/arm/boot/dts/vendor
+
 # Documentation toolchain
 sphinx_*/
+
+out
+AnyKernel3
+toolchains
+
+# KernelSU & SuSFS dynamic build artifacts
+KernelSU/
+.susfs/
+drivers/kernelsu
+fs/susfs.c
+include/linux/susfs.h
+include/linux/susfs_def.h
+arch/arm64/configs/vendor/ksu_susfs.config

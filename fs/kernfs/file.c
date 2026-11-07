@@ -257,6 +257,7 @@ static ssize_t kernfs_fop_write_iter(struct kiocb *iocb, struct iov_iter *iter)
 	struct kernfs_open_file *of = kernfs_of(iocb->ki_filp);
 	ssize_t len = iov_iter_count(iter);
 	const struct kernfs_ops *ops;
+	char buf_onstack[SZ_64] __aligned(sizeof(long));
 	char *buf;
 
 	if (of->atomic_write_len) {
@@ -266,13 +267,17 @@ static ssize_t kernfs_fop_write_iter(struct kiocb *iocb, struct iov_iter *iter)
 		len = min_t(size_t, len, PAGE_SIZE);
 	}
 
-	buf = of->prealloc_buf;
-	if (buf)
-		mutex_lock(&of->prealloc_mutex);
-	else
-		buf = kmalloc(len + 1, GFP_KERNEL);
-	if (!buf)
-		return -ENOMEM;
+	if (len < sizeof(buf_onstack)) {
+		buf = buf_onstack;
+	} else {
+		buf = of->prealloc_buf;
+		if (buf)
+			mutex_lock(&of->prealloc_mutex);
+		else
+			buf = kmalloc(len + 1, GFP_KERNEL);
+		if (!buf)
+			return -ENOMEM;
+	}
 
 	if (copy_from_iter(buf, len, iter) != len) {
 		len = -EFAULT;
@@ -306,7 +311,7 @@ static ssize_t kernfs_fop_write_iter(struct kiocb *iocb, struct iov_iter *iter)
 out_free:
 	if (buf == of->prealloc_buf)
 		mutex_unlock(&of->prealloc_mutex);
-	else
+	else if (buf != buf_onstack)
 		kfree(buf);
 	return len;
 }
@@ -847,6 +852,7 @@ static void kernfs_notify_workfn(struct work_struct *work)
 {
 	struct kernfs_node *kn;
 	struct kernfs_super_info *info;
+	struct kernfs_root *root;
 repeat:
 	/* pop one off the notify_list */
 	spin_lock_irq(&kernfs_notify_lock);
@@ -859,8 +865,9 @@ repeat:
 	kn->attr.notify_next = NULL;
 	spin_unlock_irq(&kernfs_notify_lock);
 
+	root = kernfs_root(kn);
 	/* kick fsnotify */
-	mutex_lock(&kernfs_mutex);
+	down_write(kernfs_rwsem(root));
 
 	list_for_each_entry(info, &kernfs_root(kn)->supers, node) {
 		struct kernfs_node *parent;
@@ -898,7 +905,7 @@ repeat:
 		iput(inode);
 	}
 
-	mutex_unlock(&kernfs_mutex);
+	up_write(kernfs_rwsem(root));
 	kernfs_put(kn);
 	goto repeat;
 }
