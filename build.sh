@@ -3,7 +3,7 @@
 #  xyn_solcito - SM7435 (Garnet) 5.10 GKI Kernel Build & Packaging Script
 #  Device:   POCO X6 5G / Redmi Note 13 Pro 5G (garnet / sm7435 - Qualcomm Parrot)
 #  ROM:      Linux 5.10.273 (Android 16)
-#  Root:     KernelSU-Next dev-susfs (base release v3.4.2) + SuSFS v2.3.0
+#  Root:     KernelSU-Next dev-susfs (base release v3.4.2) + SuSFS v2.4.0
 #  Compiler: Google AOSP Clang r563880c (LLVM 21.0.0)
 #            or Neutron Clang 06092026 (LLVM 24.0.0git) via --neutron
 # ==============================================================================
@@ -105,11 +105,11 @@ KSU_REPO="https://github.com/pershoot/KernelSU-Next"
 # KernelSU-Next carries its SuSFS integration on the dev-susfs branch (its base
 # release is v3.4.2).  The plain "v3.4.2" tag has no CONFIG_KSU_SUSFS at all, and
 # the SuSFS project's KernelSU-side patch does not apply to this fork, so
-# dev-susfs is the ref that actually pairs with SuSFS 2.3.0 here.
+# dev-susfs is the ref that actually pairs with SuSFS 2.4.0 here.
 KSU_REF="${KSU_REF:-dev-susfs}"
 SUSFS_REPO="${SUSFS_REPO:-https://gitlab.com/simonpunk/susfs4ksu.git}"
 SUSFS_REF="${SUSFS_REF:-gki-android12-5.10-dev}"
-SUSFS_EXPECTED_VERSION="v2.3.0"
+SUSFS_EXPECTED_VERSION="v2.4.0"
 ALLOW_SUSFS_DRIFT=false
 KSU_DIR="$KERNEL_ROOT/KernelSU"
 SUSFS_DIR="$KERNEL_ROOT/.susfs"
